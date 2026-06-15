@@ -1,0 +1,3 @@
+template-file-path: templates/network.yaml
+parameters: {}
+tags: {}
