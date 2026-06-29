@@ -27,6 +27,11 @@ Parameters:
     Default: ecs-cicd-app
     Description: Name of the application repository (for OIDC trust).
 
+  GitHubBranch:
+    Type: String
+    Default: main
+    Description: Branch whose GitHub Actions workflows may assume the OIDC role.
+
   ContainerPort:
     Type: Number
     Default: 8080
@@ -228,6 +233,7 @@ Resources:
       SourceSecurityGroupId: !Ref AlbSecurityGroup
       Description: Allow ALB to reach container port
 
+
   VpcEndpointSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -353,8 +359,7 @@ Resources:
             Condition:
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
-              StringLike:
-                token.actions.githubusercontent.com:sub: !Sub 'repo:${GitHubOrg}/${GitHubAppRepo}:*'
+                token.actions.githubusercontent.com:sub: !Sub 'repo:${GitHubOrg}/${GitHubAppRepo}:ref:refs/heads/${GitHubBranch}'
       Policies:
         - PolicyName: EcrPushPolicy
           PolicyDocument:
@@ -661,15 +666,22 @@ Resources:
                   - ecr:BatchGetImage
                   - ecr:GetDownloadUrlForLayer
                 Resource: !GetAtt EcrRepository.Arn
+              # CodeDeploy create/get actions scoped to this application + deployment group.
               - Effect: Allow
                 Action:
                   - codedeploy:CreateDeployment
                   - codedeploy:GetDeployment
-                  - codedeploy:GetDeploymentConfig
                   - codedeploy:GetApplicationRevision
                   - codedeploy:RegisterApplicationRevision
                   - codedeploy:GetDeploymentGroup
-                Resource: '*'
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:codedeploy:${AWS::Region}:${AWS::AccountId}:application:${CodeDeployApplication}'
+                  - !Sub 'arn:${AWS::Partition}:codedeploy:${AWS::Region}:${AWS::AccountId}:deploymentgroup:${CodeDeployApplication}/*'
+              # GetDeploymentConfig targets the deployment-config resource (covers AWS-managed configs).
+              - Effect: Allow
+                Action: codedeploy:GetDeploymentConfig
+                Resource: !Sub 'arn:${AWS::Partition}:codedeploy:${AWS::Region}:${AWS::AccountId}:deploymentconfig:*'
+              # These ECS describe/register actions do not support resource-level scoping.
               - Effect: Allow
                 Action:
                   - ecs:DescribeServices
