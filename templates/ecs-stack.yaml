@@ -33,6 +33,12 @@ Parameters:
     Default: main
     Description: Branch whose GitHub Actions workflows may assume the OIDC role.
 
+  CreateOidcProvider:
+    Type: String
+    Default: 'false'        # this account already has the provider
+    AllowedValues: ['true', 'false']
+    Description: Create the GitHub OIDC provider, or reuse the one already in the account.
+
   ContainerPort:
     Type: Number
     Default: 8080
@@ -54,6 +60,12 @@ Parameters:
   PrivateSubnet2Cidr:
     Type: String
     Default: 10.0.11.0/24
+
+
+# CONDITIONS
+
+Conditions:
+  ShouldCreateOidcProvider: !Equals [!Ref CreateOidcProvider, 'true']
 
 
 # RESOURCES
@@ -336,8 +348,11 @@ Resources:
  
   # 5. OIDC - GitHub Actions federated role (no long-lived secrets)
  
+  # Only created when CreateOidcProvider=true. An account allows just one provider per
+  # URL; this account already has one, so by default we reference the existing provider.
   GitHubOidcProvider:
     Type: AWS::IAM::OIDCProvider
+    Condition: ShouldCreateOidcProvider
     Properties:
       Url: https://token.actions.githubusercontent.com
       ClientIdList:
@@ -355,7 +370,11 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Federated: !Ref GitHubOidcProvider
+              # Use the provider we create, or the existing account-level one (same ARN).
+              Federated: !If
+                - ShouldCreateOidcProvider
+                - !Ref GitHubOidcProvider
+                - !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com'
             Action: sts:AssumeRoleWithWebIdentity
             Condition:
               StringEquals:
