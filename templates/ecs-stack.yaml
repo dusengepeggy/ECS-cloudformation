@@ -20,11 +20,12 @@ Parameters:
 
   GitHubOrg:
     Type: String
+    Default: dusengepeggy
     Description: GitHub org/username that owns the application repo (for OIDC trust).
 
   GitHubAppRepo:
     Type: String
-    Default: ecs-cicd-app
+    Default: ECS-Lab
     Description: Name of the application repository (for OIDC trust).
 
   GitHubBranch:
